@@ -1,0 +1,66 @@
+WITH HCD_MOVIMENTACAO_PACIENTE AS(
+select
+b.nr_seq_interno,
+b.nr_atendimento,
+b.cd_setor_atendimento,
+obter_classif_setor(b.cd_setor_atendimento)cd_classif_setor_anterior,
+b.dt_entrada_unidade dt_primeira_entrada,
+obter_desc_setor_atend(b.cd_setor_atendimento)ds_setor_anterior,
+obter_data_alta_atendimento(b.nr_atendimento)dt_alta,
+lead(obter_desc_setor_atend(b.cd_setor_atendimento)) over(partition by b.nr_atendimento order by b.dt_entrada_unidade asc)ds_proximo_setor,
+lead(obter_classif_setor(b.cd_setor_atendimento)) over(partition by b.nr_atendimento order by b.dt_entrada_unidade asc)cd_classif_prox_setor,
+nvl(lead(b.dt_entrada_unidade) over(partition by b.nr_atendimento order by b.dt_saida_unidade asc),obter_data_alta_atendimento(b.nr_atendimento))dt_entrada_prox_setor
+
+from atend_paciente_unidade b
+where 1=1
+and b.ie_passagem_setor = 'N'
+and obter_tipo_atendimento(b.nr_atendimento) = 1
+and obter_classif_setor(b.cd_setor_atendimento) in (3,4)
+--and b.nr_atendimento = 440579
+)
+
+select 
+a.nr_atendimento,
+a.dt_primeira_entrada,
+a.cd_classif_setor_anterior,
+a.ds_setor_anterior,
+a.ds_proximo_setor,
+a.cd_classif_prox_setor,
+a.dt_entrada_prox_setor,
+(trunc(dt_entrada_prox_setor) - trunc(dt_primeira_entrada))qt_dias_entre_setores,
+HCD_OBTER_QTE_EVOLUCOES(a.nr_atendimento,dt_primeira_entrada,dt_entrada_prox_setor,'EFA')QT_EVOLUCOES,
+
+case 
+    when (cd_classif_setor_anterior = 4 and (trunc(dt_entrada_prox_setor) - trunc(dt_primeira_entrada) = HCD_OBTER_QTE_EVOLUCOES(a.nr_atendimento,dt_primeira_entrada,dt_entrada_prox_setor,'EFA')))
+    then 'Conforme'
+    when (cd_classif_setor_anterior = 3) 
+    then 'Não necessita'
+    when (cd_classif_setor_anterior = 4 and (trunc(dt_entrada_prox_setor) - trunc(dt_primeira_entrada) > HCD_OBTER_QTE_EVOLUCOES(a.nr_atendimento,dt_primeira_entrada,dt_entrada_prox_setor,'EFA')))
+    then 'Não conforme'
+    else Null
+    end EVOLUCAO_DIARIA_UTI,
+
+case
+    when ((cd_classif_setor_anterior = 4 and cd_classif_prox_setor = 3) and exists(select 1 from escala_eif_ii x 
+                                                                                                                where x.nr_atendimento = a.nr_atendimento 
+                                                                                                                and x.nr_seq_escala in (4)
+                                                                                                                and x.ie_situacao = 'A'
+                                                                                                                and trunc(x.dt_liberacao) between trunc(a.dt_entrada_prox_setor) and trunc(a.dt_entrada_prox_setor +(48/24))
+                                                                                                                and x.dt_liberacao is not null
+                                                                                                                and x.dt_inativacao is null ))
+    then 'Conforme'
+    when ((cd_classif_setor_anterior = 4 and cd_classif_prox_setor = 3) and not exists(select 1 from escala_eif_ii x 
+                                                                                                                where x.nr_atendimento = a.nr_atendimento 
+                                                                                                                and x.nr_seq_escala in (4)
+                                                                                                                and x.ie_situacao = 'A'
+                                                                                                                and trunc(x.dt_liberacao) between trunc(a.dt_entrada_prox_setor) and trunc(a.dt_entrada_prox_setor +(48/24))
+                                                                                                                and x.dt_liberacao is not null
+                                                                                                                and x.dt_inativacao is null ))
+    then 'Não conforme'
+    else 'Não necessita' end ESCORE_TRANSICAO,
+
+a.dt_alta
+from hcd_movimentacao_paciente a
+where 1=1
+and (trunc(dt_entrada_prox_setor) - trunc(dt_primeira_entrada)) > 0
+and cd_classif_setor_anterior = 4

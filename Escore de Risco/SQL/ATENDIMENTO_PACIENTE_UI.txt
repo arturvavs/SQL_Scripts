@@ -1,0 +1,21 @@
+select 
+distinct a.nr_atendimento,
+a.dt_entrada,
+a.dt_alta,
+nvl(a.dt_saida_unidade,a.dt_saida_interno)dt_saida,
+a.dt_entrada_unidade,
+to_char(a.dt_entrada,'MM/YYYY')mes_entrada
+
+from paciente_internado_v2 a
+where 1=1
+and a.nr_atendimento in (select x.nr_atendimento from atend_paciente_unidade x where cd_setor_atendimento in (117,
+116,
+327,
+120,
+118,
+107,
+111,
+109,
+112,
+108,
+110))

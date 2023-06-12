@@ -1,0 +1,91 @@
+WITH HCD_ESCORE_FLEX_II AS (select 
+a.nr_atendimento,
+obter_data_entrada(a.nr_atendimento)dt_entrada_paciente,
+obter_data_alta_atendimento(a.nr_atendimento)dt_alta_paciente,
+trunc(a.dt_liberacao)dt_liberacao_escala,
+obter_desc_resul_score_flex_2(qt_pontos,nr_seq_escala)ds_escala,
+lead(obter_desc_resul_score_flex_2(a.qt_pontos,a.nr_seq_escala))    over(partition by a.nr_atendimento order by a.dt_liberacao asc)ds_proxima_escala,
+nvl(lead(dt_liberacao)    over(partition by a.nr_atendimento order by a.dt_liberacao asc),obter_data_alta_atendimento(a.nr_atendimento))dt_proxima_escala,
+hcd_obter_unid_atend_adep_6(a.nr_atendimento,a.dt_liberacao,'C')cd_setor_escala,
+hcd_obter_unid_atend_adep_6(a.nr_atendimento,a.dt_liberacao,'S')ds_setor_escala,
+round((nvl(lead(dt_liberacao)    over(partition by a.nr_atendimento order by a.dt_liberacao asc),obter_data_alta_atendimento(a.nr_atendimento))) - (a.dt_liberacao))qt_dias_entre_escalas,
+obter_dias_internacao(a.nr_atendimento)qt_dias_internado
+from
+escala_eif_ii a
+where 1=1
+and a.nr_seq_escala in (4)
+and a.ie_situacao = 'A'
+and a.dt_liberacao is not null
+and a.dt_inativacao is null),
+
+HCD_TAXA_CONFORMIDADE AS (select 
+b.nr_atendimento,
+b.dt_entrada_paciente,
+b.dt_alta_paciente,
+b.dt_liberacao_escala,
+b.ds_escala,
+b.ds_proxima_escala,
+b.dt_proxima_escala,
+b.cd_setor_escala,
+b.ds_setor_escala,
+b.qt_dias_internado,
+decode(b.qt_dias_entre_escalas,0,1,b.qt_dias_entre_escalas)qt_dias_entre_escalas,
+
+case when exists(select 1 from escala_eif_ii z where 1=1 
+                                                and z.nr_atendimento = b.nr_atendimento
+                                                and z.dt_liberacao between b.dt_entrada_paciente and ((b.dt_entrada_paciente)+48/24)
+                                                and z.nr_seq_escala in (4)
+                                                and z.ie_situacao = 'A'
+                                                and z.dt_liberacao is not null
+                                                and z.dt_inativacao is null
+                                                )then 'Conforme' else 'Não conforme' end ESCALA_ADIMISSAO,
+
+
+
+case when (qt_dias_entre_escalas > 7 and qt_dias_internado >= 7) then 'Não conforme'
+when (qt_dias_internado < 7) then 'Não necessita'
+when (ds_proxima_escala is null and dt_proxima_escala = dt_alta_paciente) then 'Não necessita'
+else 'Conforme' end ESCALA_SEMANAL,
+
+(select count(distinct trunc(x.dt_liberacao)) from evolucao_paciente_lib_v x
+    where 1=1
+    and x.nr_atendimento = b.nr_atendimento
+    and x.ie_situacao = 'A'
+    and x.dt_liberacao is not null
+    and x.ie_evolucao_clinica in ('EFA')
+    and trunc(x.dt_liberacao) between trunc(b.dt_liberacao_escala) and trunc(b.dt_proxima_escala))qt_evolucao_entre_escalas,
+    
+case when ((ds_escala in ('ALTO RISCO','RISCO MUITO ALTO')) and (select count(distinct trunc(x.dt_liberacao)) from evolucao_paciente_lib_v x
+    where 1=1
+    and x.nr_atendimento = b.nr_atendimento
+    and x.ie_situacao = 'A'
+    and x.dt_liberacao is not null
+    and x.ie_evolucao_clinica in ('EFA')
+    and trunc(x.dt_liberacao) between trunc(b.dt_liberacao_escala) and trunc(b.dt_proxima_escala)) >= decode(b.qt_dias_entre_escalas,0,1,b.qt_dias_entre_escalas)) then 'Conforme'
+    when ((ds_escala not in ('ALTO RISCO','RISCO MUITO ALTO'))) then 'Não necessita'
+    --when ( ds_escala in ('ALTO RISCO','RISCO MUITO ALTO') and trunc(dt_liberacao_escala) = trunc(dt_proxima_escala)) then 'Não necessita'
+    else 'Não conforme' end EVOLUCAO_CONFORME
+
+from HCD_ESCORE_FLEX_II B
+where 1=1 )
+
+SELECT C.NR_ATENDIMENTO,
+C.DT_ENTRADA_PACIENTE,
+C.DT_ALTA_PACIENTE,
+C.DT_LIBERACAO_ESCALA,
+C.DS_ESCALA,
+C.DS_PROXIMA_ESCALA,
+C.DT_PROXIMA_ESCALA,
+C.CD_SETOR_ESCALA,
+c.ds_setor_escala,
+C.QT_DIAS_INTERNADO,
+C.QT_DIAS_ENTRE_ESCALAS,
+C.ESCALA_ADIMISSAO,
+case 
+when((SELECT COUNT(1) FROM HCD_TAXA_CONFORMIDADE X WHERE X.ESCALA_SEMANAL = 'Não conforme' and x.nr_atendimento=c.nr_atendimento group by x.nr_Atendimento)> 0) and (c.escala_semanal <> 'Não necessita') then 'Não conforme'
+when c.escala_semanal = 'Não necessita' then Null
+ELSE 'Conforme' end ESCALA_SEMANAL,
+C.EVOLUCAO_CONFORME
+
+FROM HCD_TAXA_CONFORMIDADE C
+

@@ -1,5 +1,6 @@
 Nesta branch está disponibilizado os scripts construídos para a construção de um indicador utilizado pela equipe de Farmacêuticos Clínicos. 
-Nele dispões de informações acerca de uma avaliação do paciente realizada pelo farmacêutico clínico. 
+Nele dispões de informações acerca de uma avaliação do paciente realizada pelo farmacêutico clínico.
+Esses scripts fazem parte da construção de um indicador no PowerBI, onde nele faço o relacionamento das consultas como tabelas que possuem conexão direta com o banco de dados.
 O intuito desse indicador é analisar a conformidade dessas avaliações, verificando se estão conformes ou não conformes, levando em considerações o fluxo interno da instiuição e a periodicidade dessas avaliações. 
 Por exemplo:
 

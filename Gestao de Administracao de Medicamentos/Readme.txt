@@ -1,0 +1,3 @@
+Nesta pasta contém o código de outro script de minha autoria.
+Nele contém informações de todas as medicações prescritas e seus respectivos horários de administração, que deverão ser conferidos no sistema para indicar se aquela medicação, naquele horário, foi administrada no paciente ou não.
+Com esse script, podemos tirar diversos indicadores como a aderência da Administração Beira Leito pelos colaboradores, taxa de administração, tempo de Administação e e períodos de pico em que as administrações são realizadas, para ajudar em planejamentos estratégios e dimensionamento da equipe assistencial.
